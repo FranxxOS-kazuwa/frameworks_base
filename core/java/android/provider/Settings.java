@@ -11659,6 +11659,10 @@ public final class Settings {
          * @hide
          */
         public static final String QS_SHOW_DATA_USAGE = "qs_show_data_usage";
+         * Control whether GMS is enabled for this user.
+         * @hide
+         */
+        public static final String GMS_ENABLED = "gms_enabled";
 
         /**
          * These entries are considered common between the personal and the managed profile,
