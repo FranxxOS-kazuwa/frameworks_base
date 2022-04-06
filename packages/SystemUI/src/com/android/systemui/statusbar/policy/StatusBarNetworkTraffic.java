@@ -128,7 +128,7 @@ public class StatusBarNetworkTraffic extends NetworkTraffic implements DarkRecei
 
     @Override
     protected void setEnabled() {
-        mEnabled = mLocation == LOCATION_STATUSBAR;
+        mEnabled = mSupportsNetworkTrafficOnStatusBar && mLocation == LOCATION_STATUSBAR;
     }
 
     @Override
