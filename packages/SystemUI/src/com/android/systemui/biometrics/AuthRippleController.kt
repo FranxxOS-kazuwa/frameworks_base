@@ -23,7 +23,6 @@ import android.content.Context
 import android.graphics.Point
 import android.hardware.biometrics.BiometricFingerprintConstants
 import android.hardware.biometrics.BiometricSourceType
-import android.os.UserHandle
 import android.provider.Settings
 import androidx.annotation.VisibleForTesting
 import com.android.keyguard.KeyguardUpdateMonitor
@@ -87,21 +86,9 @@ class AuthRippleController @Inject constructor(
     private var udfpsController: UdfpsController? = null
     private var udfpsRadius: Float = -1f
 
-    private var animationDuration: Long
-
-    init {
-        animationDuration = sysuiContext.resources.getFloat(
-                R.dimen.auth_ripple_animation_duration).toLong()
-    }
-
-    private val isRippleEnabled: Boolean
-        get() = Settings.System.getIntForUser(context.contentResolver,
-            Settings.System.ENABLE_RIPPLE_EFFECT, 1, UserHandle.USER_CURRENT) == 1
-
     override fun onInit() {
         mView.setAlphaInDuration(sysuiContext.resources.getInteger(
                 R.integer.auth_ripple_alpha_in_duration).toLong())
-        mView.setAnimationDuration(animationDuration)
     }
 
     @VisibleForTesting
@@ -172,7 +159,6 @@ class AuthRippleController @Inject constructor(
     }
 
     private fun showUnlockedRipple() {
-        if (!isRippleEnabled) return
 
         notificationShadeWindowController.setForcePluginOpen(true, this)
         val lightRevealScrim = centralSurfaces.lightRevealScrim
@@ -193,13 +179,6 @@ class AuthRippleController @Inject constructor(
     }
 
     override fun onKeyguardFadingAwayChanged() {
-        if (!isRippleEnabled) {
-            // reset and hide the scrim so it doesn't appears on
-            // the next notification shade usage
-            centralSurfaces.lightRevealScrim?.revealAmount = 1f
-            startLightRevealScrimOnKeyguardFadingAway = false
-            return
-        }
 
         if (keyguardStateController.isKeyguardFadingAway) {
             val lightRevealScrim = centralSurfaces.lightRevealScrim
@@ -207,7 +186,7 @@ class AuthRippleController @Inject constructor(
                 lightRevealScrimAnimator?.cancel()
                 lightRevealScrimAnimator = ValueAnimator.ofFloat(.1f, 1f).apply {
                     interpolator = Interpolators.LINEAR_OUT_SLOW_IN
-                    duration = animationDuration
+                    duration = RIPPLE_ANIMATION_DURATION
                     startDelay = keyguardStateController.keyguardFadingAwayDelay
                     addUpdateListener { animator ->
                         if (lightRevealScrim.revealEffect != circleReveal) {
@@ -317,11 +296,17 @@ class AuthRippleController @Inject constructor(
     private val udfpsControllerCallback =
         object : UdfpsController.Callback {
             override fun onFingerDown() {
-                showDwellRipple()
+                if (Settings.System.getInt(sysuiContext.contentResolver,
+                       Settings.System.UDFPS_ANIM, 0) == 0) {
+                    showDwellRipple()
+                }
             }
 
             override fun onFingerUp() {
+                if (Settings.System.getInt(sysuiContext.contentResolver,
+                        Settings.System.UDFPS_ANIM, 0) == 0) {
                 mView.retractDwellRipple()
+                }
             }
         }
 
@@ -399,5 +384,9 @@ class AuthRippleController @Inject constructor(
             pw.println("invalid command")
             help(pw)
         }
+    }
+
+    companion object {
+        const val RIPPLE_ANIMATION_DURATION: Long = 1533
     }
 }
