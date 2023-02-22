@@ -341,6 +341,7 @@ public class BatteryManager {
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
+     }
 
     public void resetStatistics() {
         try {
@@ -348,9 +349,7 @@ public class BatteryManager {
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
-      }
-
-    }
+     }
 
     /**
      * Query a battery property from the batteryproperties service.
