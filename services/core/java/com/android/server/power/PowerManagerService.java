@@ -76,6 +76,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelDuration;
 import android.os.PowerManager;
+import android.os.FileUtils;
 import android.os.PowerManager.GoToSleepReason;
 import android.os.PowerManager.ServiceType;
 import android.os.PowerManager.WakeReason;
@@ -141,6 +142,7 @@ import dalvik.annotation.optimization.NeverCompile;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.text.SimpleDateFormat;
@@ -275,6 +277,11 @@ public final class PowerManagerService extends SystemService
     private static final int HALT_MODE_SHUTDOWN = 0;
     private static final int HALT_MODE_REBOOT = 1;
     private static final int HALT_MODE_REBOOT_SAFE_MODE = 2;
+
+    // Smart charging: sysfs node of charger
+    private static final String BATTERY_CHARGER_PATH =
+            "/sys/class/power_supply/battery/battery_charging_enabled";
+    private static final String CHARGER_PATH = "/sys/class/power_supply/battery/charging_enabled";
 
     /**
      * How stale we'll allow the enhanced discharge prediction values to get before considering them
@@ -798,6 +805,17 @@ public final class PowerManagerService extends SystemService
             }
         }
     }
+
+    // Smart charging
+    private boolean mSmartChargingEnabled;
+    private boolean mSmartChargingResetStats;
+    private int mSmartChargingLevel;
+    private int mSmartChargingLevelDefaultConfig;
+    // Handle charger
+    private boolean mUseCharger = true;
+    // Handle battery charging, when false the charger will keep the
+    // battery at the current level
+    private boolean mChargeBattery = true;
 
     // User id corresponding to activity the user is currently interacting with.
     private @UserIdInt int mForegroundProfile;
@@ -1408,6 +1426,15 @@ public final class PowerManagerService extends SystemService
         resolver.registerContentObserver(Settings.System.getUriFor(
                 Settings.System.NAVIGATION_BAR_SHOW),
                 false, mSettingsObserver, UserHandle.USER_ALL);
+        resolver.registerContentObserver(Settings.System.getUriFor(
+                Settings.System.SMART_CHARGING),
+                false, mSettingsObserver, UserHandle.USER_ALL);
+        resolver.registerContentObserver(Settings.System.getUriFor(
+                Settings.System.SMART_CHARGING_LEVEL),
+                false, mSettingsObserver, UserHandle.USER_ALL);
+        resolver.registerContentObserver(Settings.System.getUriFor(
+                Settings.System.SMART_CHARGING_RESET_STATS),
+                false, mSettingsObserver, UserHandle.USER_ALL);
 
         IVrManager vrManager = IVrManager.Stub.asInterface(getBinderService(Context.VR_SERVICE));
         if (vrManager != null) {
@@ -1493,6 +1520,8 @@ public final class PowerManagerService extends SystemService
             mProximityWakeLock = mContext.getSystemService(PowerManager.class)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ProximityWakeLock");
         }
+        mSmartChargingLevelDefaultConfig = resources.getInteger(
+                com.android.internal.R.integer.config_smartChargingBatteryLevel);
     }
 
     @GuardedBy("mLock")
@@ -1550,6 +1579,14 @@ public final class PowerManagerService extends SystemService
                 Settings.System.PROXIMITY_ON_WAKE,
                 mProximityWakeEnabledByDefaultConfig ? 1 : 0) == 1;
 
+        mSmartChargingEnabled = Settings.System.getIntForUser(resolver,
+                Settings.System.SMART_CHARGING, 0, UserHandle.USER_CURRENT) == 1;
+        mSmartChargingLevel = Settings.System.getIntForUser(resolver,
+                Settings.System.SMART_CHARGING_LEVEL,
+                mSmartChargingLevelDefaultConfig, UserHandle.USER_CURRENT);
+        mSmartChargingResetStats = Settings.System.getIntForUser(resolver,
+                Settings.System.SMART_CHARGING_RESET_STATS, 0, UserHandle.USER_CURRENT) == 1;
+
         mButtonTimeout = Settings.Secure.getIntForUser(resolver,
                 Settings.Secure.BUTTON_BACKLIGHT_TIMEOUT,
                 DEFAULT_BUTTON_ON_DURATION, UserHandle.USER_CURRENT);
@@ -1574,6 +1611,7 @@ public final class PowerManagerService extends SystemService
     void handleSettingsChangedLocked() {
         updateSettingsLocked();
         updatePowerStateLocked();
+        updateSmartChargingStatus();
     }
 
     private void acquireWakeLockInternal(IBinder lock, int displayId, int flags, String tag,
@@ -2582,6 +2620,40 @@ public final class PowerManagerService extends SystemService
             }
 
             mBatterySaverStateMachine.setBatteryStatus(mIsPowered, mBatteryLevel, mBatteryLevelLow);
+            updateSmartChargingStatus();
+        }
+    }
+
+    private void updateSmartChargingStatus() {
+        if (mIsPowered || (mUseCharger == false)) {
+            boolean allowBatteryCharging = true;
+            boolean allowCharger = true;
+            if (mSmartChargingEnabled && (mBatteryLevel >= mSmartChargingLevel)) {
+                if (mBatteryLevel > mSmartChargingLevel) {
+                    allowCharger = false;
+                }
+                allowBatteryCharging = false;
+            }
+
+            if (mChargeBattery != allowBatteryCharging) {
+                try {
+                    mChargeBattery = allowBatteryCharging;
+                    FileUtils.stringToFile(BATTERY_CHARGER_PATH, mChargeBattery ? "1" : "0");
+                } catch (IOException e) {
+                    Slog.e(TAG, "failed to write to " + BATTERY_CHARGER_PATH);
+                    mChargeBattery = !mChargeBattery;
+                }
+            }
+
+            if (mUseCharger != allowCharger) {
+                try {
+                    mUseCharger = allowCharger;
+                    FileUtils.stringToFile(CHARGER_PATH, mUseCharger ? "1" : "0");
+                } catch (IOException e) {
+                    Slog.e(TAG, "failed to write to " + CHARGER_PATH);
+                    mUseCharger = !mUseCharger;
+                }
+            }
         }
     }
 
