@@ -341,6 +341,15 @@ public class BatteryManager {
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
+
+    public void resetStatistics() {
+        try {
+            mBatteryStats.resetStatistics();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+      }
+
     }
 
     /**
