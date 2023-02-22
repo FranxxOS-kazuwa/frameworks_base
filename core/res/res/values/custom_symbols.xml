@@ -156,6 +156,9 @@
     <java-symbol type="string" name="config_lightFontFamily" />
     <java-symbol type="string" name="config_regularFontFamily" />
 
-    <!-- Smart charging battery percentage -->
+    <!-- Smart charging -->
     <java-symbol type="integer" name="config_smartChargingBatteryLevel" />
+    <java-symbol type="string" name="config_SmartChargingSysfsNode" />
+    <java-symbol type="string" name="config_SmartChargingSuspendValue" />
+    <java-symbol type="string" name="config_SmartChargingResumeValue" />
 </resources>

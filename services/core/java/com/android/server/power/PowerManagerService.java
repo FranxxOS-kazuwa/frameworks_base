@@ -278,11 +278,6 @@ public final class PowerManagerService extends SystemService
     private static final int HALT_MODE_REBOOT = 1;
     private static final int HALT_MODE_REBOOT_SAFE_MODE = 2;
 
-    // Smart charging: sysfs node of charger
-    private static final String BATTERY_CHARGER_PATH =
-            "/sys/class/power_supply/battery/battery_charging_enabled";
-    private static final String CHARGER_PATH = "/sys/class/power_supply/battery/charging_enabled";
-
     /**
      * How stale we'll allow the enhanced discharge prediction values to get before considering them
      * invalid.
@@ -809,13 +804,12 @@ public final class PowerManagerService extends SystemService
     // Smart charging
     private boolean mSmartChargingEnabled;
     private boolean mSmartChargingResetStats;
+    private boolean mPowerInputSuspended = false;
     private int mSmartChargingLevel;
     private int mSmartChargingLevelDefaultConfig;
-    // Handle charger
-    private boolean mUseCharger = true;
-    // Handle battery charging, when false the charger will keep the
-    // battery at the current level
-    private boolean mChargeBattery = true;
+    private static String mPowerInputSuspendSysfsNode;
+    private static String mPowerInputSuspendValue;
+    private static String mPowerInputResumeValue;
 
     // User id corresponding to activity the user is currently interacting with.
     private @UserIdInt int mForegroundProfile;
@@ -1520,8 +1514,15 @@ public final class PowerManagerService extends SystemService
             mProximityWakeLock = mContext.getSystemService(PowerManager.class)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ProximityWakeLock");
         }
+        // Smart Charging
         mSmartChargingLevelDefaultConfig = resources.getInteger(
                 com.android.internal.R.integer.config_smartChargingBatteryLevel);
+        mPowerInputSuspendSysfsNode = resources.getString(
+                com.android.internal.R.string.config_SmartChargingSysfsNode);
+        mPowerInputSuspendValue = resources.getString(
+                com.android.internal.R.string.config_SmartChargingSuspendValue);
+        mPowerInputResumeValue = resources.getString(
+                com.android.internal.R.string.config_SmartChargingResumeValue);
     }
 
     @GuardedBy("mLock")
@@ -2625,34 +2626,32 @@ public final class PowerManagerService extends SystemService
     }
 
     private void updateSmartChargingStatus() {
-        if (mIsPowered || (mUseCharger == false)) {
-            boolean allowBatteryCharging = true;
-            boolean allowCharger = true;
-            if (mSmartChargingEnabled && (mBatteryLevel >= mSmartChargingLevel)) {
-                if (mBatteryLevel > mSmartChargingLevel) {
-                    allowCharger = false;
+        if (mPowerInputSuspended && (mBatteryLevel < mSmartChargingLevel) ||
+            (mPowerInputSuspended && !mSmartChargingEnabled)) {
+            try {
+                FileUtils.stringToFile(mPowerInputSuspendSysfsNode, mPowerInputResumeValue);
+                mPowerInputSuspended = false;
+            } catch (IOException e) {
+                Slog.e(TAG, "failed to write to " + mPowerInputSuspendSysfsNode);
+            }
+            return;
+        }
+
+       if (mSmartChargingEnabled && !mPowerInputSuspended && (mBatteryLevel >= mSmartChargingLevel)) {
+            Slog.i(TAG, "Smart charging reset stats: " + mSmartChargingResetStats);
+            if (mSmartChargingResetStats) {
+                try {
+                     mBatteryStats.resetStatistics();
+                } catch (RemoteException e) {
+                         Slog.e(TAG, "failed to reset battery statistics");
                 }
-                allowBatteryCharging = false;
             }
 
-            if (mChargeBattery != allowBatteryCharging) {
-                try {
-                    mChargeBattery = allowBatteryCharging;
-                    FileUtils.stringToFile(BATTERY_CHARGER_PATH, mChargeBattery ? "1" : "0");
-                } catch (IOException e) {
-                    Slog.e(TAG, "failed to write to " + BATTERY_CHARGER_PATH);
-                    mChargeBattery = !mChargeBattery;
-                }
-            }
-
-            if (mUseCharger != allowCharger) {
-                try {
-                    mUseCharger = allowCharger;
-                    FileUtils.stringToFile(CHARGER_PATH, mUseCharger ? "1" : "0");
-                } catch (IOException e) {
-                    Slog.e(TAG, "failed to write to " + CHARGER_PATH);
-                    mUseCharger = !mUseCharger;
-                }
+            try {
+                FileUtils.stringToFile(mPowerInputSuspendSysfsNode, mPowerInputSuspendValue);
+                mPowerInputSuspended = true;
+            } catch (IOException e) {
+                    Slog.e(TAG, "failed to write to " + mPowerInputSuspendSysfsNode);
             }
         }
     }
