@@ -5815,6 +5815,11 @@ public final class Settings {
         public static final String SMART_CHARGING_RESET_STATS = "smart_charging_reset_stats";
 
         /**
+         * @hide
+         */
+        public static final String SMART_CHARGING_RESUME_LEVEL = "smart_charging_resume_level";
+
+        /**
          * Color temperature of the display during the day
          * @hide
          */
