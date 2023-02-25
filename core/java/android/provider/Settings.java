@@ -4077,7 +4077,7 @@ public final class Settings {
          * Statusbar logo
          * @hide
          */
-        public static final String STATUS_BAR_LOGO = "status_bar_logo";
+        public static final String STATUS_BAR_LOGO = "statusbar_logo";
 
         /**
          * Position of Status bar logo
@@ -4085,13 +4085,13 @@ public final class Settings {
          * 1 - Right
          * @hide
          */
-        public static final String STATUS_BAR_LOGO_POSITION = "status_bar_logo_position";
+        public static final String STATUS_BAR_LOGO_POSITION = "statusbar_logo_position";
 
         /**
          * Statusbar logo custom style
          * @hide
          */
-        public static final String STATUS_BAR_LOGO_STYLE = "status_bar_logo_style";
+        public static final String STATUS_BAR_LOGO_STYLE = "statusbar_logo_style";
 
         /**
          * Convenience function to read all of the current
