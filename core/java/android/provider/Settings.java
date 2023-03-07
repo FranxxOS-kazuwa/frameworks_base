@@ -5997,8 +5997,11 @@ public final class Settings {
          * Sensor blocked packages
          * @hide
          */
+        @Readable
         public static final String SENSOR_BLOCKED_APP = "sensor_blocked_app";
+
          /** @hide */
+        @Readable
         public static final String SENSOR_BLOCKED_APP_DUMMY = "sensor_blocked_app_dummy";
 
         /**
